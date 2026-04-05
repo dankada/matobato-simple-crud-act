@@ -1,8 +1,8 @@
 'use client'
-export const dynamic = 'force-dynamic'
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import * as XLSX from 'xlsx'
 import { supabase } from '@/lib/supabaseClient'
 
 type Category = {
@@ -39,41 +39,19 @@ export default function TestCategoriesPage() {
 
   useEffect(() => { fetchAll() }, [])
 
-  const openCreate = () => {
-    setForm(emptyForm())
-    setEditingId(null)
-    setError(null)
-    setModalOpen(true)
-  }
-
-  const openEdit = (row: Category) => {
-    setForm({ name: row.name, description: row.description ?? '' })
-    setEditingId(row.id)
-    setError(null)
-    setModalOpen(true)
-  }
-
-  const closeModal = () => {
-    setModalOpen(false)
-    setError(null)
-  }
+  const openCreate = () => { setForm(emptyForm()); setEditingId(null); setError(null); setModalOpen(true) }
+  const openEdit = (row: Category) => { setForm({ name: row.name, description: row.description ?? '' }); setEditingId(row.id); setError(null); setModalOpen(true) }
+  const closeModal = () => { setModalOpen(false); setError(null) }
 
   const handleSave = async () => {
     if (!form.name.trim()) { setError('Name is required.'); return }
-    setLoading(true)
-    setError(null)
-
+    setLoading(true); setError(null)
     const payload = { name: form.name.trim(), description: form.description.trim() || null }
-
     const { error } = editingId
       ? await supabase.from('testcategories').update(payload).eq('id', editingId)
       : await supabase.from('testcategories').insert(payload)
-
     if (error) { setError(error.message); setLoading(false); return }
-
-    setModalOpen(false)
-    await fetchAll()
-    setLoading(false)
+    setModalOpen(false); await fetchAll(); setLoading(false)
   }
 
   const handleDelete = async (id: number) => {
@@ -83,131 +61,121 @@ export default function TestCategoriesPage() {
     else await fetchAll()
   }
 
+  // ── Export ────────────────────────────────────────────────────────────────
+
+  const handleExcel = () => {
+    const data = rows.map((r) => ({
+      ID: r.id,
+      Name: r.name,
+      Description: r.description ?? '',
+    }))
+    const ws = XLSX.utils.json_to_sheet(data)
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'Test Categories')
+    XLSX.writeFile(wb, 'test_categories.xlsx')
+  }
+
+  const handlePDF = () => { window.print() }
+
+  // ── Render ────────────────────────────────────────────────────────────────
+
   return (
-    <div className="min-h-screen bg-[#f0f4f8] p-6 md:p-10 font-sans">
-      <div className="max-w-4xl mx-auto">
-        <div className="flex items-center gap-2 mb-1">
-          <Link href="/" className="text-slate-400 hover:text-blue-500 text-sm transition-colors">
-            ← Home
-          </Link>
-        </div>
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-2xl font-bold text-slate-800">Test Categories</h1>
-            <p className="text-slate-400 text-sm mt-0.5">{rows.length} record{rows.length !== 1 ? 's' : ''}</p>
-          </div>
-          <button
-            onClick={openCreate}
-            className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors shadow-sm"
-          >
-            + Add Category
-          </button>
-        </div>
+    <>
+      <style>{`
+        @media print {
+          @page { size: A4 portrait; margin: 20mm; }
+          .no-print { display: none !important; }
+          body { background: white !important; }
+          table { width: 100%; border-collapse: collapse; font-size: 11pt; }
+          th, td { border: 1px solid #ccc; padding: 6px 10px; text-align: left; }
+          th { background: #f1f5f9; font-weight: 600; }
+        }
+      `}</style>
 
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-          {fetching ? (
-            <div className="p-10 text-center text-slate-400 text-sm">Loading…</div>
-          ) : rows.length === 0 ? (
-            <div className="p-10 text-center text-slate-400 text-sm">No records yet. Add one!</div>
-          ) : (
-            <table className="w-full text-sm">
-              <thead className="bg-slate-50 border-b border-slate-200">
-                <tr>
-                  <th className="text-left px-5 py-3 text-slate-500 font-medium w-10">#</th>
-                  <th className="text-left px-5 py-3 text-slate-500 font-medium">Name</th>
-                  <th className="text-left px-5 py-3 text-slate-500 font-medium">Description</th>
-                  <th className="px-5 py-3 text-slate-500 font-medium text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {rows.map((row) => (
-                  <tr key={row.id} className="hover:bg-slate-50 transition-colors">
-                    <td className="px-5 py-3 text-slate-400 font-mono text-xs">{row.id}</td>
-                    <td className="px-5 py-3 text-slate-800 font-medium">
-                      <span className="inline-block bg-slate-100 text-slate-700 text-xs font-mono px-2 py-0.5 rounded">
-                        {row.name}
-                      </span>
-                    </td>
-                    <td className="px-5 py-3 text-slate-500">{row.description ?? <span className="italic text-slate-300">—</span>}</td>
-                    <td className="px-5 py-3 text-right space-x-2">
-                      <button
-                        onClick={() => openEdit(row)}
-                        className="text-blue-500 hover:text-blue-700 text-xs font-medium transition-colors"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => handleDelete(row.id)}
-                        className="text-red-400 hover:text-red-600 text-xs font-medium transition-colors"
-                      >
-                        Delete
-                      </button>
-                    </td>
+      <div className="min-h-screen bg-[#f0f4f8] p-6 md:p-10 font-sans">
+        <div className="max-w-4xl mx-auto">
+          <div className="flex items-center gap-2 mb-1 no-print">
+            <Link href="/" className="text-slate-400 hover:text-blue-500 text-sm transition-colors">← Home</Link>
+          </div>
+
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h1 className="text-2xl font-bold text-slate-800">Test Categories</h1>
+              <p className="text-slate-400 text-sm mt-0.5">{rows.length} record{rows.length !== 1 ? 's' : ''}</p>
+            </div>
+            <div className="flex gap-2 no-print">
+              <button onClick={handleExcel} className="bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors shadow-sm">
+                ⬇ Excel
+              </button>
+              <button onClick={handlePDF} className="bg-rose-500 hover:bg-rose-600 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors shadow-sm">
+                🖨 PDF
+              </button>
+              <button onClick={openCreate} className="bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors shadow-sm">
+                + Add Category
+              </button>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            {fetching ? (
+              <div className="p-10 text-center text-slate-400 text-sm">Loading…</div>
+            ) : rows.length === 0 ? (
+              <div className="p-10 text-center text-slate-400 text-sm">No records yet. Add one!</div>
+            ) : (
+              <table className="w-full text-sm">
+                <thead className="bg-slate-50 border-b border-slate-200">
+                  <tr>
+                    <th className="text-left px-5 py-3 text-slate-500 font-medium w-10">#</th>
+                    <th className="text-left px-5 py-3 text-slate-500 font-medium">Name</th>
+                    <th className="text-left px-5 py-3 text-slate-500 font-medium">Description</th>
+                    <th className="px-5 py-3 text-slate-500 font-medium text-right no-print">Actions</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
-      </div>
-
-      {modalOpen && (
-        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
-            <h2 className="text-lg font-bold text-slate-800 mb-4">
-              {editingId ? 'Edit Category' : 'New Test Category'}
-            </h2>
-
-            {error && (
-              <p className="text-red-500 text-xs bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-4">
-                {error}
-              </p>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {rows.map((row) => (
+                    <tr key={row.id} className="hover:bg-slate-50 transition-colors">
+                      <td className="px-5 py-3 text-slate-400 font-mono text-xs">{row.id}</td>
+                      <td className="px-5 py-3 text-slate-800 font-medium">
+                        <span className="inline-block bg-slate-100 text-slate-700 text-xs font-mono px-2 py-0.5 rounded">{row.name}</span>
+                      </td>
+                      <td className="px-5 py-3 text-slate-500">{row.description ?? <span className="italic text-slate-300">—</span>}</td>
+                      <td className="px-5 py-3 text-right space-x-2 no-print">
+                        <button onClick={() => openEdit(row)} className="text-blue-500 hover:text-blue-700 text-xs font-medium transition-colors">Edit</button>
+                        <button onClick={() => handleDelete(row.id)} className="text-red-400 hover:text-red-600 text-xs font-medium transition-colors">Delete</button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             )}
-
-            <div className="space-y-4">
-              <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">
-                  Name <span className="text-red-400">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={form.name}
-                  onChange={(e) => setForm({ ...form, name: e.target.value })}
-                  placeholder="e.g. BCT"
-                  maxLength={50}
-                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">Description</label>
-                <textarea
-                  value={form.description}
-                  onChange={(e) => setForm({ ...form, description: e.target.value })}
-                  placeholder="Optional description…"
-                  rows={3}
-                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-                />
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-2 mt-6">
-              <button
-                onClick={closeModal}
-                className="px-4 py-2 text-sm text-slate-600 hover:text-slate-800 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSave}
-                disabled={loading}
-                className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-medium px-5 py-2 rounded-lg transition-colors"
-              >
-                {loading ? 'Saving…' : editingId ? 'Save Changes' : 'Create'}
-              </button>
-            </div>
           </div>
         </div>
-      )}
-    </div>
+
+        {modalOpen && (
+          <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-4 no-print">
+            <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+              <h2 className="text-lg font-bold text-slate-800 mb-4">{editingId ? 'Edit Category' : 'New Test Category'}</h2>
+              {error && <p className="text-red-500 text-xs bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-4">{error}</p>}
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Name <span className="text-red-400">*</span></label>
+                  <input type="text" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. BCT" maxLength={50} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-1">Description</label>
+                  <textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Optional description…" rows={3} className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none" />
+                </div>
+              </div>
+              <div className="flex justify-end gap-2 mt-6">
+                <button onClick={closeModal} className="px-4 py-2 text-sm text-slate-600 hover:text-slate-800 transition-colors">Cancel</button>
+                <button onClick={handleSave} disabled={loading} className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-medium px-5 py-2 rounded-lg transition-colors">
+                  {loading ? 'Saving…' : editingId ? 'Save Changes' : 'Create'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </>
   )
 }
